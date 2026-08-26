@@ -1,0 +1,45 @@
+name: Run Bursa screener
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_marketcap:
+        description: "Max market cap (RM millions)"
+        default: "50"
+      threshold:
+        description: "Majority shareholder threshold (%)"
+        default: "50"
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/ -v
+      - name: Run screener
+        run: |
+          python -m bursa_screener.screen \
+            --max-marketcap "${{ inputs.max_marketcap }}" \
+            --threshold "${{ inputs.threshold }}" \
+            --out candidates.csv
+      - name: Summarize
+        if: always()
+        run: |
+          echo "## Screener output" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f candidates.csv ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat candidates.csv >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "candidates.csv was not produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidates
+          path: candidates.csv
+          if-no-files-found: warn

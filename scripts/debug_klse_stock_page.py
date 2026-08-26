@@ -7,7 +7,7 @@ import requests
 
 from bursa_screener.utils import HEADERS
 
-code = sys.argv[1] if len(sys.argv) > 1 else "03029"
+code = sys.argv[1] if len(sys.argv) > 1 else "2429"
 url = f"https://www.klsescreener.com/v2/stocks/view/{code}"
 resp = requests.get(url, headers=HEADERS, timeout=30)
 html = resp.text

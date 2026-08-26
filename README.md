@@ -7,36 +7,36 @@ Screens Bursa Malaysia listed companies for potential acquisition targets matchi
 3. Market cap < RM50 million
 4. A single shareholder holding more than 50% of shares
 
-## How it works
+## Status (confirmed against the live sites via GitHub Actions CI)
 
-**Stage 1 - financials** (`bursa_screener/klse_screener.py`): queries
+**Stage 1 - financials: works.** Queries
 [klsescreener.com](https://www.klsescreener.com/v2/)'s screener backend
-directly for negative PE + market cap < RM50m, then double-checks EPS < 0 as
-well (net loss and negative PE are really the same signal, since price is
-always positive - EPS < 0 is checked as a belt-and-suspenders confirmation).
-This part is high confidence: the request format and HTML layout were taken
-from a public reference implementation and the parser has an offline unit
-test (`tests/test_klse_screener.py`).
+(`bursa_screener/klse_screener.py`) for negative PE + market cap < RM50m,
+then confirms EPS < 0 as well. As of the last live CI run this correctly
+found **141 real counters** matching all three financial criteria. The
+site's HTML layout doesn't quite match older third-party documentation of
+it (it has an extra "Change" column that shifts naive positional parsing),
+so the parser locates fields by each cell's `title` attribute instead of
+raw position - see the module docstring for the full story, and
+`tests/test_klse_screener.py` for an offline regression test built from
+real captured HTML.
 
-**Stage 2 - majority shareholder** (`bursa_screener/shareholder.py`): for
-each Stage 1 candidate, checks i3investor's substantial-shareholder
-disclosure page for anyone holding >50%. **Read the caveats in that file's
-docstring before trusting this output** - i3investor's page is a
-transaction log of regulatory disclosures, not a live cap table, so this is
-an estimate based on the most recently disclosed percentage per shareholder
-name. Always confirm against the company's latest Annual Report ("Analysis
-of Shareholdings") or a fresh Bursa LINK announcement before treating a
-candidate as real.
-
-## Important: run this somewhere with real internet access
-
-This repository was authored inside a sandboxed Claude Code session whose
-network egress proxy blocks klsescreener.com, i3investor.com, and
-bursamalaysia.com outright. The klsescreener parsing logic was verified
-offline against a synthetic HTML fixture; the i3investor logic could not be
-exercised against live HTML at all. **Run this on your own machine** (or
-any environment with normal internet access), and sanity-check the first
-run's output by hand against the live sites.
+**Stage 2 - majority shareholder: does not work, by design falls back to
+manual review.** `bursa_screener/shareholder.py` was written to check
+i3investor's substantial-shareholder disclosure page per candidate, but
+i3investor.com sits behind a Cloudflare "managed challenge" - every
+request gets HTTP 403 and a JavaScript challenge page instead of real
+data. That's confirmed live, not a guess, and it's not something a plain
+HTTP request can get past. **`python -m bursa_screener.screen` does not
+attempt this check by default** (see `--attempt-shareholder-check` if you
+want to try anyway, e.g. after swapping in a browser-based fetcher that
+can pass the challenge). Every output row instead carries a
+`verify_shareholding_url` - check that by hand, or against the company's
+latest Annual Report ("Analysis of Shareholdings" section), before
+treating any candidate as a real target. Even if the Cloudflare gate were
+solved, i3investor's page is a disclosure transaction log rather than a
+clean live cap table, so it would still only be an estimate - see
+`shareholder.py`'s module docstring for the full detail.
 
 ## Usage
 
@@ -48,16 +48,22 @@ python -m bursa_screener.screen --out candidates.csv
 Options:
 
 - `--max-marketcap` - RM millions (default 50)
-- `--threshold` - shareholder %% threshold (default 50)
-- `--delay` - seconds between i3investor requests, be polite (default 1)
+- `--threshold` - shareholder %% threshold, only relevant with `--attempt-shareholder-check` (default 50)
+- `--attempt-shareholder-check` - try the i3investor check anyway (currently always fails, see Status above)
+- `--delay` - seconds between i3investor requests when attempting the check (default 1)
 - `--out` - output CSV path
 
 Output CSV columns: `code, name, market, price, eps, pe, market_cap_rm_mil,
 top_shareholder, top_shareholder_pct, has_majority_shareholder,
-verify_shareholding_url`.
+verify_shareholding_url`. The last four columns are blank/unpopulated
+unless you pass `--attempt-shareholder-check` - `verify_shareholding_url`
+is always populated so you can check by hand.
 
-Every row includes `verify_shareholding_url` so you can quickly manually
-confirm any candidate i3investor scraping missed or got wrong.
+A GitHub Actions workflow (`.github/workflows/run_screener.yml`) runs this
+on every push to this branch (and via manual dispatch) - useful since this
+project was authored in a sandboxed session with no route to
+klsescreener.com or i3investor.com; CI is how Stage 1 was actually
+verified against live data.
 
 ## Tests
 
@@ -66,6 +72,6 @@ pip install -r requirements.txt
 pytest tests/
 ```
 
-Only the klsescreener parser is covered - it's the one piece that could be
-tested without live network access. There's no test for the i3investor
-module for the same reason.
+Only the klsescreener parser is covered by an offline test - it's the
+piece that was fixable and verifiable without live network access. There's
+no test for the i3investor module since it doesn't currently work.

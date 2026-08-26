@@ -1,28 +1,36 @@
 """Best-effort lookup of substantial (>=5%) shareholders for a Bursa Malaysia
 counter, via i3investor's substantial-shareholder disclosure page.
 
-IMPORTANT CAVEATS
-------------------
-i3investor's page is a *transaction log* of Section 137/138 disclosures
-(acquisitions, disposals, notices of interest) rather than a clean, current
-cap table. This module takes, per shareholder name, the most recently
-disclosed "Total %" figure as an estimate of their current holding. That
-estimate is only as fresh and complete as the company's latest disclosure -
-it can miss recent private placements, conversions, or holdings that never
-crossed a disclosure threshold change.
+STATUS: CONFIRMED NON-FUNCTIONAL, BY DESIGN FALLS BACK TO MANUAL REVIEW.
 
-Before treating any candidate as a real acquisition target, confirm the
-shareholding manually against the company's latest Annual Report ("Analysis
-of Shareholdings" section) or a fresh Bursa LINK announcement.
+Verified live via GitHub Actions CI (this sandboxed environment cannot
+reach i3investor.com directly): klse.i3investor.com sits behind Cloudflare's
+"managed challenge" - every request gets back HTTP 403 and a JavaScript
+challenge page ("Just a moment...") instead of the actual shareholder
+table. That is not something a plain HTTP request (this module, or any
+`requests`-based scraper) can pass; it needs either a real browser solving
+the challenge or a paid Cloudflare-unblocking proxy, neither of which this
+module attempts. Bypassing it more aggressively wasn't pursued here since
+it would mean fighting the target site's explicit anti-bot measures.
 
-This module could not be exercised against the live site from within the
-sandboxed environment that authored it (klse.i3investor.com is not
-reachable from that network's egress proxy), so the CSS/column-matching
-logic below is unverified against real HTML. It is written defensively:
-on any parsing failure it returns an empty result rather than raising, so
-callers should always fall back to the manual-check URL from source_url().
-Verify the column matching still works on the first live run and adjust
-COLUMN_KEYWORDS below if the site's headers have changed.
+get_latest_substantial_shareholders() therefore returns an empty list for
+every real counter today, and has_majority_shareholder() always reports
+False as a result - not because no candidate has a majority shareholder,
+but because this check cannot currently run at all. screen.py's output
+still carries a verify_shareholding_url for every candidate specifically
+so this gap doesn't get mistaken for a real "no" answer: shareholding must
+be confirmed by hand for now, e.g. against the company's latest Annual
+Report ("Analysis of Shareholdings" section) or a Bursa LINK announcement.
+
+Design note for anyone revisiting this: even if the Cloudflare challenge
+were solved (e.g. via Playwright), i3investor's page is a *transaction
+log* of Section 137/138 disclosures rather than a clean, current cap
+table, so the per-shareholder "most recent Total %" this module extracts
+would still only be an estimate - it can miss recent private placements,
+conversions, or holdings that never crossed a disclosure-triggering
+threshold change. The column-matching logic below was written against
+real captured HTML from before the Cloudflare gate was hit and is
+untested end-to-end for that reason.
 """
 from __future__ import annotations
 

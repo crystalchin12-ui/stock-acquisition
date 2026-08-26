@@ -28,10 +28,6 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v
-      - name: Debug i3investor response
-        run: python scripts/debug_i3investor_response.py 03029
-        env:
-          PYTHONPATH: .
       - name: Run screener
         run: |
           python -m bursa_screener.screen \

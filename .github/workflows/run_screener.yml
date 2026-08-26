@@ -30,7 +30,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v
       - name: Debug klsescreener stock page for shareholding data
-        run: python scripts/debug_klse_stock_page.py 03029
+        run: python scripts/debug_klse_stock_page.py 2429
         env:
           PYTHONPATH: .
       - name: Run screener

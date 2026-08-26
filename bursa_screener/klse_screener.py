@@ -1,19 +1,23 @@
 """Screen Bursa Malaysia listed companies via klsescreener.com's screener backend.
 
-The endpoint and form-field names below (``min_pe``/``max_pe``,
-``min_marketcap``/``max_marketcap``, etc.) and the HTML row layout
-(``tbody tr.list`` -> 15 ``td`` cells in a fixed order) were taken from the
-MIT-licensed Go scraper https://github.com/kokweikhong/klsescreener-scraper,
-which documents the same POST endpoint that klsescreener.com's own screener
-page calls. This module is an independent Python port, not a copy of that
-code.
+The endpoint and form-field names (``min_pe``/``max_pe``,
+``min_marketcap``/``max_marketcap``, etc.) were taken from the MIT-licensed
+Go scraper https://github.com/kokweikhong/klsescreener-scraper, which
+documents the same POST endpoint that klsescreener.com's own screener page
+calls. Those still work as documented, confirmed against the live site via
+GitHub Actions CI (this sandboxed environment cannot reach klsescreener.com
+directly - see .github/workflows/run_screener.yml).
 
-Note: this could not be exercised against the live site from within the
-sandboxed environment that authored it (klsescreener.com is not reachable
-from that network's egress proxy). The HTML-parsing logic is covered by an
-offline unit test using a synthetic row (see tests/), but you should sanity
-check the first live run's output against https://www.klsescreener.com/v2/screener
-manually before relying on it.
+The HTML row layout has moved on from what that reference scraper
+documented, though: the live page now has an extra "Change" column (the
+absolute change) before "Change %", which shifts every purely
+index-based field after it by one - and two more trailing columns
+(an indicators cell and an actions cell) that don't matter here. To avoid
+silently breaking again the next time the site adds a column, most fields
+below are located by each ``<td>``'s ``title`` attribute (e.g.
+``title="EPS"``) rather than by raw position; only Price/Change/Change%
+share an ambiguous title and are located by their position relative to the
+uniquely-titled "Change" cell.
 """
 from __future__ import annotations
 
@@ -22,6 +26,7 @@ from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 from .utils import HEADERS, clean_text, to_float
 
@@ -56,6 +61,18 @@ class Quote:
     market_cap_rm_mil: Optional[float]
 
 
+def _cell_by_title(cells: list[Tag], title: str) -> Optional[Tag]:
+    for c in cells:
+        if c.get("title") == title:
+            return c
+    return None
+
+
+def _text_by_title(cells: list[Tag], title: str) -> Optional[str]:
+    cell = _cell_by_title(cells, title)
+    return clean_text(cell.get_text()) if cell is not None else None
+
+
 def parse_quote_results(html: str) -> list[Quote]:
     """Parse a klsescreener quote_results response body into Quote rows."""
     soup = BeautifulSoup(html, "lxml")
@@ -63,44 +80,57 @@ def parse_quote_results(html: str) -> list[Quote]:
     quotes: list[Quote] = []
     for row in soup.select("tbody tr.list"):
         cells = row.find_all("td")
-        if len(cells) < 15:
+        # name, code, category, price, change, change%, 52week, volume,
+        # eps, dps, nta, pe, dy, roe, ptbv, market cap = 16 minimum
+        if len(cells) < 16:
             continue
-        cell_text = [clean_text(c.get_text()) for c in cells]
 
-        short_name = cell_text[0].replace("[s]", "").strip()
+        short_name = clean_text(cells[0].get_text()).replace("[s]", "").strip()
         name = cells[0].get("title", "") or short_name
-        code = cell_text[1]
+        code = _text_by_title(cells, "Code") or clean_text(cells[1].get_text())
 
-        market, category = "", ""
-        if "," in cell_text[2]:
-            parts = cell_text[2].split(",", 1)
-            category, market = parts[0].strip(), parts[1].strip()
+        category, market = "", ""
+        category_text = _text_by_title(cells, "Category")
+        if category_text:
+            if "," in category_text:
+                parts = category_text.split(",", 1)
+                category, market = parts[0].strip(), parts[1].strip()
+            else:
+                category = category_text
+
+        # Price, Change, Change% are adjacent and Price/Change% share an
+        # ambiguous title, so locate them relative to the unique "Change" cell.
+        change_cell = _cell_by_title(cells, "Change")
+        change_idx = cells.index(change_cell) if change_cell is not None else 4
+        price_text = clean_text(cells[change_idx - 1].get_text()) if change_idx >= 1 else None
+        changes_pct_text = clean_text(cells[change_idx + 1].get_text()) if change_idx + 1 < len(cells) else None
 
         week52_low = week52_high = None
-        if "-" in cell_text[5]:
-            lo, hi = cell_text[5].split("-", 1)
+        week52_text = _text_by_title(cells, "52week")
+        if week52_text and "-" in week52_text:
+            lo, hi = week52_text.split("-", 1)
             week52_low, week52_high = to_float(lo), to_float(hi)
 
         quotes.append(
             Quote(
                 short_name=short_name,
                 name=name,
-                code=code,
+                code=code or "",
                 category=category,
                 market=market,
-                price=to_float(cell_text[3]),
-                changes_pct=to_float(cell_text[4]),
+                price=to_float(price_text) if price_text else None,
+                changes_pct=to_float(changes_pct_text) if changes_pct_text else None,
                 week52_low=week52_low,
                 week52_high=week52_high,
-                volume=to_float(cell_text[6]),
-                eps=to_float(cell_text[7]),
-                dps=to_float(cell_text[8]),
-                nta=to_float(cell_text[9]),
-                pe=to_float(cell_text[10]),
-                dy=to_float(cell_text[11]),
-                roe=to_float(cell_text[12]),
-                ptbv=to_float(cell_text[13]),
-                market_cap_rm_mil=to_float(cell_text[14]),
+                volume=to_float(_text_by_title(cells, "Volume") or ""),
+                eps=to_float(_text_by_title(cells, "EPS") or ""),
+                dps=to_float(_text_by_title(cells, "DPS") or ""),
+                nta=to_float(_text_by_title(cells, "NTA") or ""),
+                pe=to_float(_text_by_title(cells, "PE") or ""),
+                dy=to_float(_text_by_title(cells, "DY") or ""),
+                roe=to_float(_text_by_title(cells, "ROE") or ""),
+                ptbv=to_float(_text_by_title(cells, "PTBV") or ""),
+                market_cap_rm_mil=to_float(_text_by_title(cells, "Market Capital") or ""),
             )
         )
     return quotes

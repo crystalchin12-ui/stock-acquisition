@@ -1,8 +1,6 @@
-"""Diagnostic: does an individual klsescreener stock page carry current
-substantial-shareholder / major-shareholder data (not just the global
-recent-changes feed)? Throwaway, run once in CI.
+"""Diagnostic: dump the full shareholding_changes table body from an
+individual klsescreener stock page. Throwaway, run once in CI.
 """
-import re
 import sys
 
 import requests
@@ -16,10 +14,9 @@ html = resp.text
 print("url:", url)
 print("status:", resp.status_code, "len:", len(html))
 
-positions = [m.start() for m in re.finditer(r"shareholding", html, re.I)]
-print("'shareholding' occurrences:", len(positions), positions)
-
-for pos in positions:
-    print(f"--- context around offset {pos} ---")
-    print(html[max(0, pos - 200):pos + 800])
-    print()
+start = html.find('id="shareholding_changes"')
+if start == -1:
+    print("shareholding_changes div not found")
+else:
+    # print a large chunk covering the whole table (thead + several tbody rows)
+    print(html[start:start + 6000])

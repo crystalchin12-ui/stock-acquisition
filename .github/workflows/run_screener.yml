@@ -30,6 +30,8 @@ jobs:
       - run: pytest tests/ -v
       - name: Debug klsescreener response
         run: python scripts/debug_klse_response.py
+        env:
+          PYTHONPATH: .
       - name: Run screener
         run: |
           python -m bursa_screener.screen \

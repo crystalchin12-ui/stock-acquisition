@@ -16,14 +16,10 @@ html = resp.text
 print("url:", url)
 print("status:", resp.status_code, "len:", len(html))
 
-for kw in ["shareholding", "Major Shareholder", "Substantial Shareholder", "shareholder"]:
-    idxs = [m.start() for m in re.finditer(re.escape(kw), html, re.I)]
-    print(f"'{kw}' occurrences: {len(idxs)}", idxs[:5])
+positions = [m.start() for m in re.finditer(r"shareholding", html, re.I)]
+print("'shareholding' occurrences:", len(positions), positions)
 
-# print context around first "shareholding"-ish match
-m = re.search(r"shareholding|shareholder", html, re.I)
-if m:
-    print("--- context around first match ---")
-    print(html[max(0, m.start() - 300):m.start() + 3000])
-else:
-    print("no match found")
+for pos in positions:
+    print(f"--- context around offset {pos} ---")
+    print(html[max(0, pos - 200):pos + 800])
+    print()

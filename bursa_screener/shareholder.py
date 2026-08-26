@@ -22,15 +22,26 @@ so this gap doesn't get mistaken for a real "no" answer: shareholding must
 be confirmed by hand for now, e.g. against the company's latest Annual
 Report ("Analysis of Shareholdings" section) or a Bursa LINK announcement.
 
+Also tried and also confirmed blocked: a real headless browser (Playwright
++ Chromium) loading the page and idling 8s for the challenge's JS to
+resolve, run from GitHub Actions CI. The page title stayed "Just a
+moment..." the whole time - Cloudflare isn't simply checking for JS
+execution here, it's flagging something about the request itself (the
+runner's IP range and/or headless-browser fingerprint are both plausible
+culprits). Going further from here (stealth-patched browsers, residential
+proxies, CAPTCHA-solving services) would mean actively working to defeat
+the site's anti-bot measures rather than just writing a scraper, and
+wasn't pursued for that reason.
+
 Design note for anyone revisiting this: even if the Cloudflare challenge
-were solved (e.g. via Playwright), i3investor's page is a *transaction
-log* of Section 137/138 disclosures rather than a clean, current cap
-table, so the per-shareholder "most recent Total %" this module extracts
-would still only be an estimate - it can miss recent private placements,
-conversions, or holdings that never crossed a disclosure-triggering
-threshold change. The column-matching logic below was written against
-real captured HTML from before the Cloudflare gate was hit and is
-untested end-to-end for that reason.
+were solved, i3investor's page is a *transaction log* of Section 137/138
+disclosures rather than a clean, current cap table, so the per-shareholder
+"most recent Total %" this module extracts would still only be an
+estimate - it can miss recent private placements, conversions, or
+holdings that never crossed a disclosure-triggering threshold change. The
+column-matching logic below was written against real captured HTML from
+before the Cloudflare gate was hit and is untested end-to-end for that
+reason.
 """
 from __future__ import annotations
 

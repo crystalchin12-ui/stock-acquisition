@@ -29,10 +29,6 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v
-      - name: Debug klsescreener stock page for shareholding data
-        run: python scripts/debug_klse_stock_page.py 2429
-        env:
-          PYTHONPATH: .
       - name: Run screener
         run: |
           python -m bursa_screener.screen \

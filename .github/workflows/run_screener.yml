@@ -9,6 +9,14 @@ on:
       threshold:
         description: "Majority shareholder threshold (%)"
         default: "50"
+  push:
+    branches:
+      - claude/bursa-malaysia-screening-2nc7mf
+    paths:
+      - "bursa_screener/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/run_screener.yml"
 
 jobs:
   screen:
@@ -23,8 +31,8 @@ jobs:
       - name: Run screener
         run: |
           python -m bursa_screener.screen \
-            --max-marketcap "${{ inputs.max_marketcap }}" \
-            --threshold "${{ inputs.threshold }}" \
+            --max-marketcap "${{ inputs.max_marketcap || '50' }}" \
+            --threshold "${{ inputs.threshold || '50' }}" \
             --out candidates.csv
       - name: Summarize
         if: always()

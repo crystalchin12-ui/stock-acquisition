@@ -42,6 +42,36 @@ holdings that never crossed a disclosure-triggering threshold change. The
 column-matching logic below was written against real captured HTML from
 before the Cloudflare gate was hit and is untested end-to-end for that
 reason.
+
+OTHER SOURCES CHECKED, ALSO CONFIRMED LIVE:
+
+- bursamalaysia.com itself (the exchange's own site - announcements
+  search and equities pages): HTTP 403 with a bot-protection challenge
+  page (Akamai-style), same story as i3investor. Not usable by a plain
+  HTTP request either.
+
+- klsescreener.com (used successfully for Stage 1 - see
+  klse_screener.py) DOES carry shareholding-change disclosures, and is
+  NOT bot-protected, but the data is split awkwardly across two pages:
+    * /v2/shareholdings (global recent-changes feed): has the actual
+      ownership % columns (Direct Unit, Direct %) we need, plus a
+      Stock column linking each row to /v2/stocks/view/{code} - but
+      it's one chronological feed across the whole market with no
+      by-code URL filter found, so using it means paginating and
+      matching rows to each candidate's code.
+    * /v2/stocks/view/{code}'s "Shareholding Changes" tab: already
+      filtered to one stock, but its table has no ownership % column
+      at all - only who acquired/disposed how many shares, not their
+      resulting stake.
+  Confirmed live against TANCO (2429), a stock with real recent
+  disclosures: e.g. "DATO' SRI ANDREW TAN JUN SUAN ... Disposed
+  11,400,000 shares" on the per-stock tab (no %), versus "TJN CAPITAL
+  SDN BHD ... 1,960,930,452 units ... 32.544%" on the global feed.
+  Either way it's still a disclosure log, not a live cap table - same
+  fundamental limitation as i3investor, just reachable instead of
+  Cloudflare-gated. Not implemented here: would need a pagination +
+  code-matching layer over the global feed, and would still only fill
+  in candidates with a *recent* disclosed change.
 """
 from __future__ import annotations
 

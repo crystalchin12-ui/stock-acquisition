@@ -1,17 +1,31 @@
-"""Diagnostic: does klsescreener.com's /v2/shareholdings page carry the
-substantial-shareholder data we need, and is it reachable (unlike
-i3investor, which is Cloudflare-blocked)? Throwaway, run once in CI.
+"""Diagnostic: inspect klsescreener.com's /v2/shareholdings page structure -
+is it per-stock searchable, and does it have current % ownership data?
+Throwaway, run once in CI.
 """
+import re
+
 import requests
 
 from bursa_screener.utils import HEADERS
 
 url = "https://www.klsescreener.com/v2/shareholdings"
 resp = requests.get(url, headers=HEADERS, timeout=30)
-print("url:", url)
-print("status:", resp.status_code)
-print("len:", len(resp.text))
-print("has <table:", "<table" in resp.text.lower())
-print("has captcha/cloudflare:", any(k in resp.text.lower() for k in ["captcha", "cloudflare", "just a moment"]))
-print("--- first 5000 chars ---")
-print(resp.text[:5000])
+html = resp.text
+print("status:", resp.status_code, "len:", len(html))
+
+# find the table area
+idx = html.lower().find("<table")
+print("--- table area (2000 chars from first <table) ---")
+print(html[idx:idx + 2000])
+
+print("--- table headers (<th> tags) ---")
+for m in re.finditer(r"<th[^>]*>(.*?)</th>", html, re.S | re.I):
+    print(repr(re.sub(r"\s+", " ", m.group(1)).strip()))
+
+print("--- form inputs / selects (possible search-by-stock) ---")
+for m in re.finditer(r"<(input|select)[^>]*>", html, re.I):
+    print(m.group(0)[:200])
+
+print("--- any ajax/api endpoint hints in inline scripts mentioning 'shareholding' ---")
+for m in re.finditer(r"[\"']([^\"']*shareholding[^\"']*)[\"']", html, re.I):
+    print(m.group(1))

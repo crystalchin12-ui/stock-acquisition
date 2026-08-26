@@ -29,6 +29,10 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: pytest tests/ -v
+      - name: Debug bursamalaysia.com reachability
+        run: python scripts/debug_bursa_website.py
+        env:
+          PYTHONPATH: .
       - name: Run screener
         run: |
           python -m bursa_screener.screen \

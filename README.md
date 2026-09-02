@@ -6,6 +6,7 @@ Screens Bursa Malaysia listed companies for potential acquisition targets matchi
 2. Negative PE
 3. Market cap < RM50 million
 4. A single shareholder holding more than 50% of shares
+5. Not a known syndicate/"corporate mafia"-linked counter (excluded by default)
 
 ## Status (confirmed against the live sites via GitHub Actions CI)
 
@@ -37,6 +38,20 @@ treating any candidate as a real target. Even if the Cloudflare gate were
 solved, i3investor's page is a disclosure transaction log rather than a
 clean live cap table, so it would still only be an estimate - see
 `shareholder.py`'s module docstring for the full detail.
+
+**Exclusion list - syndicate/"corporate mafia"-linked counters.**
+`bursa_screener/exclusions.py` maintains a manually curated, sourced list
+of Bursa-listed counters publicly reported (Bloomberg, The Edge Malaysia)
+as linked to the Victor Chin Boon Long "corporate mafia" case - businessmen
+alleged to have used MACC investigations to pressure shareholders into
+selling stakes at undervalued prices, then taken control via
+cross-shareholdings. `python -m bursa_screener.screen` excludes any such
+counter from its output by default; pass `--include-flagged` to keep them
+in (e.g. to review why they were flagged). This is **not** a complete list
+of every company the group has touched (reporting says Chin and associates
+held stakes in close to 30 counters) - only the ones confirmed by name in
+reporting are listed, so treat exclusion (or its absence) as a starting
+point for manual due diligence, not a final verdict.
 
 ## Usage
 

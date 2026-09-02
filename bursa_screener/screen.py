@@ -5,6 +5,8 @@
                               price is always positive)
   3. market cap < RM50 million
   4. a single shareholder holding more than 50% of shares
+  5. not a known syndicate/"corporate mafia"-linked counter (see
+     exclusions.py) - excluded by default, pass --include-flagged to keep them
 
 Stage 1 (financials) queries klsescreener.com directly and works, confirmed
 live via CI - see klse_screener.py. Stage 2 (shareholding) does NOT run by
@@ -31,6 +33,7 @@ import csv
 import sys
 import time
 
+from .exclusions import exclusion_reason, is_excluded
 from .klse_screener import fetch_quotes
 from .shareholder import has_majority_shareholder, source_url
 
@@ -41,6 +44,7 @@ def run(
     delay: float = 1.0,
     out_path: str = "candidates.csv",
     attempt_shareholder_check: bool = False,
+    exclude_syndicate: bool = True,
 ) -> None:
     print(
         f"Stage 1: querying klsescreener.com for market cap < RM{max_marketcap}m, negative PE ...",
@@ -51,6 +55,14 @@ def run(
     # in case the site's PE field is blank/zero for some loss-making rows.
     candidates = [q for q in quotes if q.pe is not None and q.pe < 0 and q.eps is not None and q.eps < 0]
     print(f"  -> {len(candidates)} counters meet the financial criteria", file=sys.stderr)
+
+    if exclude_syndicate:
+        excluded = [q for q in candidates if is_excluded(q.code)]
+        candidates = [q for q in candidates if not is_excluded(q.code)]
+        for q in excluded:
+            print(f"  -> excluding {q.code} {q.name}: {exclusion_reason(q.code)}", file=sys.stderr)
+        if excluded:
+            print(f"  -> {len(excluded)} counter(s) excluded as syndicate-linked (see exclusions.py)", file=sys.stderr)
 
     if attempt_shareholder_check:
         print(
@@ -115,6 +127,11 @@ def main() -> None:
         action="store_true",
         help="try i3investor per candidate anyway (currently always fails - see shareholder.py)",
     )
+    parser.add_argument(
+        "--include-flagged",
+        action="store_true",
+        help="don't exclude known syndicate/'corporate mafia'-linked counters (see exclusions.py)",
+    )
     args = parser.parse_args()
     run(
         max_marketcap=args.max_marketcap,
@@ -122,6 +139,7 @@ def main() -> None:
         delay=args.delay,
         out_path=args.out,
         attempt_shareholder_check=args.attempt_shareholder_check,
+        exclude_syndicate=not args.include_flagged,
     )
 
 
